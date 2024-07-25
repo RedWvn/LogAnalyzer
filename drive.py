@@ -1,53 +1,59 @@
 # drive.py
 import os  # Add this import
 import pickle
+import os
 import base64
+from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import Flow
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseDownload
 
 # OAuth 2.0 setup
-SCOPES = ['https://www.googleapis.com/auth/drive']
-TOKEN_PATH = 'token.pickle'
-CREDENTIALS_PATH = 'credentials.json'
+SCOPES = ['https://www.googleapis.com/auth/drive.readonly', 'https://www.googleapis.com/auth/spreadsheets.readonly']
 
-# Decode the Base64 credentials and write to 'credentials.json'
-base64_credentials = os.getenv('GOOGLE_CREDENTIALS_BASE64')
-if base64_credentials:
-    with open(CREDENTIALS_PATH, 'wb') as f:
-        f.write(base64.b64decode(base64_credentials))
+# Use environment variables for sensitive information
+CLIENT_ID = st.secrets["GOOGLE_CLIENT_ID"]
+CLIENT_SECRET = st.secrets["GOOGLE_CLIENT_SECRET"]
+REDIRECT_URI = st.secrets["GOOGLE_REDIRECT_URI"]
 
-def authenticate_gdrive(auth_code=None):
-    creds = None
+def get_authorization_url():
+    flow = Flow.from_client_config(
+        {
+            "web": {
+                "client_id": CLIENT_ID,
+                "client_secret": CLIENT_SECRET,
+                "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+                "token_uri": "https://oauth2.googleapis.com/token",
+                "redirect_uris": [REDIRECT_URI]
+            }
+        },
+        scopes=SCOPES
+    )
+    flow.redirect_uri = REDIRECT_URI
+    authorization_url, _ = flow.authorization_url(prompt='consent')
+    return authorization_url
 
-    if os.path.exists(TOKEN_PATH):
-        with open(TOKEN_PATH, 'rb') as token:
-            creds = pickle.load(token)
+def get_credentials(code):
+    flow = Flow.from_client_config(
+        {
+            "web": {
+                "client_id": CLIENT_ID,
+                "client_secret": CLIENT_SECRET,
+                "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+                "token_uri": "https://oauth2.googleapis.com/token",
+                "redirect_uris": [REDIRECT_URI]
+            }
+        },
+        scopes=SCOPES
+    )
+    flow.redirect_uri = REDIRECT_URI
+    flow.fetch_token(code=code)
+    return flow.credentials
 
-    if not creds or not creds.valid:
-        flow = Flow.from_client_secrets_file(CREDENTIALS_PATH, SCOPES)
-        # Use your local redirect URI for testing
-        flow.redirect_uri = 'http://localhost:8501'
-
-        if auth_code:
-            try:
-                flow.fetch_token(code=auth_code)
-                creds = flow.credentials
-
-                # Save the credentials for the next run
-                with open(TOKEN_PATH, 'wb') as token:
-                    pickle.dump(creds, token)
-            except Exception as e:
-                raise Exception(f"Failed to fetch token: {e}")
-        else:
-            auth_url, _ = flow.authorization_url(prompt='consent')
-            return auth_url  # Return the URL for the user to visit
-
-    service = build('drive', 'v3', credentials=creds)
-    return service
+def build_drive_service(credentials):
+    return build('drive', 'v3', credentials=credentials)
 
 def list_items(service, folder_id, mime_type=None):
-    # Example function to list items in a folder
     query = f"'{folder_id}' in parents"
     if mime_type:
         query += f" and mimeType='{mime_type}'"
