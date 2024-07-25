@@ -1,3 +1,4 @@
+import streamlit as st
 from ui import main_app
 
 def main():
