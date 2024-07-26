@@ -69,28 +69,29 @@ def main_app():
 
     # Check if we have stored credentials
     if 'credentials' not in st.session_state:
-        # If not, start the OAuth flow
-        if 'oauth_state' not in st.session_state:
-            auth_url, state = get_authorization_url()
-            st.session_state['oauth_state'] = state
-            st.markdown(f"[Click here to authorize the application]({auth_url})")
-        elif st.experimental_get_query_params().get("code"):
-            code = st.experimental_get_query_params()["code"][0]
+        # Check if we're handling a callback from OAuth
+        params = st.experimental_get_query_params()
+        if 'code' in params:
             try:
+                code = params['code'][0]
                 credentials = get_credentials(code)
                 st.session_state['credentials'] = credentials
+                # Clear the URL parameters
+                st.experimental_set_query_params()
                 st.experimental_rerun()
             except Exception as e:
                 st.error(f"Error during authorization: {str(e)}")
                 st.session_state.pop('oauth_state', None)
         else:
-            st.info("Waiting for authorization...")
+            # If not, start the OAuth flow
+            auth_url, state = get_authorization_url()
+            st.session_state['oauth_state'] = state
+            st.markdown(f"[Click here to authorize the application]({auth_url})")
     
     if 'credentials' in st.session_state:
         credentials = st.session_state['credentials']
         drive_service = build_drive_service(credentials)
         sheets_service = build_sheets_service(credentials)
-
         root_folder_id = ROOT_FOLDER_ID
         folders = {folder['name']: folder for folder in list_items(drive_service, root_folder_id, 'application/vnd.google-apps.folder')}
         selected_folder = st.selectbox("Select Folder", list(folders.keys()))
