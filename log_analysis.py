@@ -38,55 +38,51 @@ def check_log_values(log_file_path, limits):
     results = []
     try:
         mlog = mavutil.mavlink_connection(log_file_path, dialect='ardupilotmega')
-        param_max_min = {}
+        param_max_min = {param: {'max': float('-inf'), 'min': float('inf')} for param in limits}
 
+        msg_count = 0
         while True:
             msg = mlog.recv_match()
             if not msg:
                 break
+
+            msg_count += 1
+            if msg_count % 1000 == 0:
+                st.write(f"Processed {msg_count} messages...")
 
             for param, (min_val, max_val, comment) in limits.items():
                 try:
                     msg_type, param_name = param.split('.')
                     if msg.get_type() == msg_type and hasattr(msg, param_name):
                         value = getattr(msg, param_name)
-                        if param not in param_max_min:
-                            param_max_min[param] = {'max': value, 'min': value}
-                        else:
-                            param_max_min[param]['max'] = max(param_max_min[param]['max'], value)
-                            param_max_min[param]['min'] = min(param_max_min[param]['min'], value)
+                        param_max_min[param]['max'] = max(param_max_min[param]['max'], value)
+                        param_max_min[param]['min'] = min(param_max_min[param]['min'], value)
                 except Exception as e:
-                    results.append(f"Error processing {param}: {e}")
+                    st.write(f"Error processing {param}: {e}")
 
         for param, (min_val, max_val, comment) in limits.items():
-            if param in param_max_min:
-                max_value = param_max_min[param]['max']
-                min_value = param_max_min[param]['min']
-                if min_value < min_val or max_value > max_val:
-                    results.append(
-                        [param.split('.')[0], param.split('.')[1], max_value, min_value, (min_val, max_val), comment])
-                else:
-                    results.append(
-                        [param.split('.')[0], param.split('.')[1], max_value, min_value, (min_val, max_val), "OK"])
+            max_value = param_max_min[param]['max']
+            min_value = param_max_min[param]['min']
+            if min_value < min_val or max_value > max_val:
+                status = "Out of range"
             else:
-                results.append([param.split('.')[0], param.split('.')[1], 'No data', 'No data', (min_val, max_val),
-                                "No data found in log file"])
+                status = "OK"
+            results.append({
+                "Msg type": param.split('.')[0],
+                "Parameter name": param.split('.')[1],
+                "Max value": max_value,
+                "Min value": min_value,
+                "Range": f"({min_val}, {max_val})",
+                "Comments": status if status == "OK" else comment
+            })
 
     except Exception as e:
-        results.append(f"Error reading log file: {e}")
+        st.error(f"Error reading log file: {e}")
 
     if not results:
-        results.append("No parameters found in log file that match the limits from the sheet.")
+        st.warning("No parameters found in log file that match the limits from the sheet.")
 
-    # Convert the results to a DataFrame
-    df = pd.DataFrame(results, columns=["Msg type", "Parameter name", "Max value", "Min value", "Range", "Comments"])
-
-    # Ensure the data types are consistent
-    df["Max value"] = pd.to_numeric(df["Max value"], errors='coerce')
-    df["Min value"] = pd.to_numeric(df["Min value"], errors='coerce')
-    df["Comments"] = df["Comments"].astype(str)
-
-    return df
+    return pd.DataFrame(results)
 
 
 def extract_sysid_thismav(bin_log_file):
