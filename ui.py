@@ -166,8 +166,8 @@ def main_app():
                                 st.error(f"Error analyzing log file: {str(e)}")
                                 st.exception(e)  # This will display the full traceback in the Streamlit app
                         
-                                                # Clean up the temporary file
-                                                os.unlink(log_file_path)
+                            # Clean up the temporary file
+                            os.unlink(log_file_path)
 
 if __name__ == "__main__":
     main_app()
