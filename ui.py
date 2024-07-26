@@ -38,8 +38,13 @@ def create_pdf(aircraft_model, aircraft_name, date, time, analysis_results):
     elements.append(Spacer(1, 0.25*inch))
 
     data = [["Parameter", "Min Value", "Max Value", "Status"]]
-    for param, values in analysis_results.items():
-        data.append([param, values['min'], values['max'], values['status']])
+    for row in analysis_results:
+        data.append([
+            f"{row['Msg type']}.{row['Parameter name']}",
+            row['Min value'],
+            row['Max value'],
+            row['Comments']
+        ])
 
     table = Table(data)
     table.setStyle(TableStyle([
@@ -136,7 +141,7 @@ def main_app():
                         
                                 aircraft_model, aircraft_name = None, None
                                 if sysid_thismav:
-                                    aircraft_model, aircraft_name = get_aircraft_info(sheets_service, SHEET_ID, sysid_thismav)
+                                    aircraft_model, aircraft_name = get_aircraft_info(sheets_service, SHEET_ID, str(sysid_thismav))
                                     st.write(f"Aircraft Model: {aircraft_model}")
                                     st.write(f"Aircraft Name: {aircraft_name}")
                         
@@ -150,24 +155,20 @@ def main_app():
                                 if isinstance(analysis_results, pd.DataFrame) and not analysis_results.empty:
                                     st.write("Analysis Results:")
                                     st.dataframe(analysis_results)
-                                else:
-                                    st.warning("No analysis results were produced. The log file might be empty or not contain the expected data.")
                         
-                                # Create PDF download button
-                                if isinstance(analysis_results, pd.DataFrame) and not analysis_results.empty:
-                                    pdf_buffer = create_pdf(aircraft_model, aircraft_name, date, time, analysis_results)
+                                    # Create PDF download button
+                                    pdf_buffer = create_pdf(aircraft_model, aircraft_name, date, time, analysis_results.to_dict('records'))
                                     st.download_button(
                                         label="Download PDF Report",
                                         data=pdf_buffer,
                                         file_name="log_analysis_report.pdf",
                                         mime="application/pdf"
                                     )
+                                else:
+                                    st.warning("No analysis results were produced. The log file might be empty or not contain the expected data.")
                             except Exception as e:
                                 st.error(f"Error analyzing log file: {str(e)}")
                                 st.exception(e)  # This will display the full traceback in the Streamlit app
                         
-                            # Clean up the temporary file
-                            os.unlink(log_file_path)
-
-if __name__ == "__main__":
-    main_app()
+                        if __name__ == "__main__":
+                            main_app()
