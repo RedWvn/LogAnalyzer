@@ -133,39 +133,41 @@ def main_app():
                             try:
                                 sysid_thismav = extract_sysid_thismav(log_file_path)
                                 st.write(f"SYSID_THISMAV: {sysid_thismav}")
-
+                        
                                 aircraft_model, aircraft_name = None, None
                                 if sysid_thismav:
-                                    aircraft_model, aircraft_name = get_aircraft_info(sheets_service, SHEET_ID,
-                                                                                      sysid_thismav)
+                                    aircraft_model, aircraft_name = get_aircraft_info(sheets_service, SHEET_ID, sysid_thismav)
                                     st.write(f"Aircraft Model: {aircraft_model}")
                                     st.write(f"Aircraft Name: {aircraft_name}")
-
+                        
                                 date, time = extract_date_time_from_filename(selected_log_file)
                                 if date:
                                     st.write(f"Log Date: {date}")
                                 if time:
                                     st.write(f"Log Time: {time}")
-
+                        
                                 analysis_results = check_log_values(log_file_path, limits)
-                                st.write("Analysis Results:")
-                                st.dataframe(analysis_results)
-
+                                if isinstance(analysis_results, pd.DataFrame) and not analysis_results.empty:
+                                    st.write("Analysis Results:")
+                                    st.dataframe(analysis_results)
+                                else:
+                                    st.warning("No analysis results were produced. The log file might be empty or not contain the expected data.")
+                        
                                 # Create PDF download button
-                                pdf_buffer = create_pdf(aircraft_model, aircraft_name, date, time, analysis_results)
-                                st.download_button(
-                                    label="Download PDF Report",
-                                    data=pdf_buffer,
-                                    file_name="log_analysis_report.pdf",
-                                    mime="application/pdf"
-                                )
-
+                                if isinstance(analysis_results, pd.DataFrame) and not analysis_results.empty:
+                                    pdf_buffer = create_pdf(aircraft_model, aircraft_name, date, time, analysis_results)
+                                    st.download_button(
+                                        label="Download PDF Report",
+                                        data=pdf_buffer,
+                                        file_name="log_analysis_report.pdf",
+                                        mime="application/pdf"
+                                    )
                             except Exception as e:
                                 st.error(f"Error analyzing log file: {str(e)}")
-                                raise  # This will print the full traceback in the Streamlit app
-
-                        # Clean up the temporary file
-                        os.unlink(log_file_path)
+                                st.exception(e)  # This will display the full traceback in the Streamlit app
+                        
+                                                # Clean up the temporary file
+                                                os.unlink(log_file_path)
 
 if __name__ == "__main__":
     main_app()
